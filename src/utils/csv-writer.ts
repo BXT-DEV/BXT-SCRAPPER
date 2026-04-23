@@ -1,0 +1,100 @@
+// ============================================================
+// CSV Writer
+// Writes results as semicolon-delimited CSV matching BecexTech format
+// Output format: SKU;Product Name;link;price;...
+// ============================================================
+
+import fs from "fs";
+import path from "path";
+import csvParser from "csv-parser";
+import type { ScrapedResult } from "../types/index.js";
+import { logger } from "./logger.js";
+
+/**
+ * Get the output file path for today's results.
+ */
+export function getOutputFilePath(outputDir: string): string {
+  const todayStamp = new Date().toISOString().slice(0, 10);
+  return path.join(outputDir, `results_${todayStamp}.csv`);
+}
+
+/**
+ * Load already-scraped SKUs from an existing output file (for resume support).
+ */
+export async function loadCompletedSkus(
+  outputPath: string
+): Promise<Set<string>> {
+  const completedSkus = new Set<string>();
+
+  if (!fs.existsSync(outputPath)) {
+    return completedSkus;
+  }
+
+  return new Promise((resolve) => {
+    fs.createReadStream(outputPath)
+      .pipe(csvParser({ separator: ";" }))
+      .on("data", (row: Record<string, string>) => {
+        const sku = row["SKU"] || row["sku"];
+        if (sku) {
+          completedSkus.add(sku.trim());
+        }
+      })
+      .on("end", () => {
+        if (completedSkus.size > 0) {
+          logger.info(
+            `Found ${completedSkus.size} already-scraped SKUs (resume mode)`
+          );
+        }
+        resolve(completedSkus);
+      })
+      .on("error", (error) => {
+        logger.warn(`Could not read existing output: ${error.message}`);
+        resolve(completedSkus);
+      });
+  });
+}
+
+/**
+ * Append a single result row to the semicolon-delimited output CSV.
+ * Creates the file with headers if it doesn't exist yet.
+ */
+export async function appendResultRow(
+  outputPath: string,
+  result: ScrapedResult
+): Promise<void> {
+  const fileExists = fs.existsSync(outputPath);
+
+  // Write header if file is new
+  if (!fileExists) {
+    fs.writeFileSync(
+      outputPath,
+      "SKU;Product Name;link;amazon_price;amazon_title;match_confidence;status;error_message\n"
+    );
+  }
+
+  // Escape semicolons in fields by wrapping in quotes
+  const escapedTitle = result.amazonTitle.includes(";")
+    ? `"${result.amazonTitle}"`
+    : result.amazonTitle;
+
+  const escapedProductName = result.productName.includes(";")
+    ? `"${result.productName}"`
+    : result.productName;
+
+  const escapedError = result.errorMessage.includes(";")
+    ? `"${result.errorMessage}"`
+    : result.errorMessage;
+
+  const row = [
+    result.sku,
+    escapedProductName,
+    result.amazonUrl,
+    result.amazonPrice || "",
+    escapedTitle,
+    result.matchConfidence.toString(),
+    result.status,
+    escapedError,
+  ].join(";");
+
+  fs.appendFileSync(outputPath, row + "\n");
+}

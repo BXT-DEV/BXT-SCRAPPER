@@ -1,0 +1,244 @@
+// ============================================================
+// Amazon Search Service
+// Scrapes Amazon search results page for product listings
+// ============================================================
+
+import type { Page } from "playwright";
+import type { AmazonSearchResult } from "../types/index.js";
+import { logger } from "../utils/logger.js";
+import { randomDelay } from "../utils/delay.js";
+import fs from "fs";
+import path from "path";
+
+const DEBUG_DIR = "debug";
+
+/**
+ * Checks if the page is actually a CAPTCHA challenge page.
+ */
+async function detectCaptcha(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const captchaForm = document.querySelector("form[action*='validateCaptcha']");
+    const captchaImage = document.querySelector("img[src*='captcha']");
+    const captchaTitle = document.title.toLowerCase().includes("robot check");
+    const sorryPage = document.querySelector("#captchacharacters");
+    return !!(captchaForm || captchaImage || captchaTitle || sorryPage);
+  });
+}
+
+/**
+ * Save a debug screenshot + HTML dump when something goes wrong.
+ */
+async function saveDebugSnapshot(page: Page, label: string): Promise<void> {
+  try {
+    fs.mkdirSync(DEBUG_DIR, { recursive: true });
+    const timestamp = Date.now();
+    const safeName = label.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 40);
+
+    await page.screenshot({ path: path.join(DEBUG_DIR, `${safeName}_${timestamp}.png`), fullPage: false });
+
+    const html = await page.content();
+    fs.writeFileSync(path.join(DEBUG_DIR, `${safeName}_${timestamp}.html`), html);
+
+    const title = await page.title();
+    const url = page.url();
+    logger.info(`[DEBUG] Screenshot saved. Title: "${title}", URL: ${url}`);
+  } catch (err) {
+    logger.warn(`Debug snapshot failed: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Searches Amazon by typing into the search box to simulate human behavior.
+ */
+export class AmazonSearchService {
+  private readonly amazonDomain: string;
+  private readonly maxResults: number;
+
+  constructor(amazonDomain: string, maxResults: number) {
+    this.amazonDomain = amazonDomain;
+    this.maxResults = maxResults;
+  }
+
+  /**
+   * Search Amazon by reusing the current page if already on Amazon.
+   * Only navigates to the homepage on the first call.
+   */
+  async searchProduct(
+    page: Page,
+    productQuery: string
+  ): Promise<AmazonSearchResult[]> {
+    try {
+      const currentUrl = page.url();
+      const isAlreadyOnAmazon = currentUrl.includes(this.amazonDomain);
+
+      if (!isAlreadyOnAmazon) {
+        logger.info(`Visiting Amazon via organic Ad Link...`);
+        // Using an organic ad link ensures traffic appears human
+        const organicAdUrl = "https://www.google.com/aclk?sa=L&pf=1&ai=DChsSEwiVpOfmkoGUAxVTP4MDHaVDE2UYACICCAEQARoCc2Y&co=1&ase=2&gclid=CjwKCAjw46HPBhAMEiwASZpLRFOgApD-IWR4k1q4BveGWmORsDK5KJFV1k9upgntMCss8Fp47OOcURoCF9UQAvD_BwE&ei=FZXoab_QIoCZ4-EPqP7Z6Q4&cid=CAASugHkaPjHD4F0cVmMg6m0fEFK0W9RPXHkwGhbFCC-mE4Kj06hT4uBKi-qAIAZlQOMXQoHBCu71Cz2qe7_UAOkVfhoIVAQ-tmZMK_7sLS7SFE5ZSB3i9xpvxAprc9T8QejeGZb6XD3O_vBaU6f7hylXlbOIkwMU1CicJTzZPtgXjucEce-N2BuxIrpa59zPyEkghSfPwqvzHOljYigkgxfjQDnfYSkC4MQrB8VUIYqj9_i7O6GHkMQotv5Vn4&cce=2&category=acrcp_v1_32&sig=AOD64_3ae5FwiShnQku5FXygOZoa4wOBqw&q&sqi=2&nis=4&adurl=https://www.amazon.com.au/b?ie%3DUTF8%26node%3D8125191051%26gad_source%3D1%26gad_campaignid%3D22605646973%26gbraid%3D0AAAAA9f922JYFucfJtTsJ9gdPK5W7W1K7%26gclid%3DCjwKCAjw46HPBhAMEiwASZpLRFOgApD-IWR4k1q4BveGWmORsDK5KJFV1k9upgntMCss8Fp47OOcURoCF9UQAvD_BwE&ved=2ahUKEwj_ruHmkoGUAxWAzDgGHSh_Nu0Q0Qx6BAgNEAE";
+        
+        await page.goto(organicAdUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 60000,
+        });
+
+        // Wait for the Amazon page to fully render
+        await page.waitForLoadState("load").catch(() => {});
+        await randomDelay(2000, 4000);
+      }
+
+      // Check for CAPTCHA
+      if (await detectCaptcha(page)) {
+        logger.error(`Blocked by CAPTCHA: ${await page.title()}`);
+        await saveDebugSnapshot(page, "captcha");
+        throw new Error("CAPTCHA_DETECTED");
+      }
+
+      logger.info(`Searching: "${productQuery}"`);
+
+      // Ensure we search in "All Departments" to avoid being restricted to a sub-category node
+      const selectCategory = await page.$("select#searchDropdownBox");
+      if (selectCategory) {
+        await selectCategory.selectOption({ label: "All Departments" }).catch(() => {});
+      }
+
+      // Find search input — wait for it explicitly
+      const searchInputSelector = "#twotabsearchtextbox, input[name='field-keywords']";
+      
+      try {
+        await page.waitForSelector(searchInputSelector, { state: "visible", timeout: 10000 });
+      } catch {
+        logger.error("Search box not visible. Saving debug snapshot...");
+        await saveDebugSnapshot(page, "no_searchbox");
+        throw new Error("SEARCH_BOX_NOT_FOUND");
+      }
+
+      // Focus, triple-click to select all, then delete
+      await page.click(searchInputSelector);
+      await randomDelay(200, 500);
+      await page.keyboard.down("Meta");
+      await page.keyboard.press("a");
+      await page.keyboard.up("Meta");
+      await page.keyboard.press("Backspace");
+      await randomDelay(300, 600);
+
+      // Type new query slowly (human-like)
+      for (const char of productQuery) {
+        await page.keyboard.type(char, { delay: Math.random() * 100 + 80 });
+      }
+
+      await randomDelay(500, 1200);
+
+      // Submit search
+      await page.keyboard.press("Enter");
+
+      // Wait for navigation to complete and page to settle
+      await page.waitForLoadState("networkidle", { timeout: 25000 }).catch(() => {});
+      
+      // Wait for either the search results grid OR a "no results" message
+      await page.waitForFunction(() => {
+        return (
+          !!document.querySelector('.s-main-slot .s-result-item') ||
+          document.body.innerText.includes("No results for") ||
+          document.body.innerText.includes("did not match any products") ||
+          document.title.toLowerCase().includes("robot check")
+        );
+      }, { timeout: 15000 }).catch(() => {
+        logger.warn("Timeout waiting for search results grid.");
+      });
+      
+      // Add one more small static delay to let images and scripts hydrate fully
+      await randomDelay(2000, 3000);
+
+      if (await detectCaptcha(page)) {
+        await saveDebugSnapshot(page, "captcha_results");
+        throw new Error("CAPTCHA_DETECTED");
+      }
+
+      const results = await this.extractSearchResults(page);
+
+      // Debug: save screenshot when 0 results (first 5 times only)
+      if (results.length === 0) {
+        logger.warn("0 results found. Saving debug snapshot...");
+        await saveDebugSnapshot(page, "zero_results");
+      }
+
+      logger.info(`Found ${results.length} search results`);
+      return results;
+    } catch (error) {
+      if (error instanceof Error && error.message === "CAPTCHA_DETECTED") throw error;
+      logger.error(`Search failed: ${(error as Error).message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Parse the DOM to extract product cards from Amazon search results.
+   */
+  private async extractSearchResults(
+    page: Page
+  ): Promise<AmazonSearchResult[]> {
+    const results = await page.evaluate((maxResults: number) => {
+      const searchResults: Array<{
+        title: string;
+        price: number | null;
+        url: string;
+        rating: number | null;
+        reviewCount: number | null;
+        isPrime: boolean;
+      }> = [];
+
+      // Try multiple selectors for search result containers
+      const resultCards = document.querySelectorAll(
+        '[data-component-type="s-search-result"], .s-result-item[data-asin]:not([data-asin=""])'
+      );
+
+      // Debug: log how many cards we found in total
+      console.log(`[extractSearchResults] Found ${resultCards.length} raw cards`);
+
+      for (const card of Array.from(resultCards).slice(0, maxResults)) {
+        // Skip sponsored
+        const sponsored = card.querySelector('.puis-sponsored-label-info-icon, [data-component-type="sp-sponsored-result"]');
+        if (sponsored) continue;
+
+        // Try to find the title anchor using data-cy="title-recipe" or h2
+        const linkEl = card.querySelector('[data-cy="title-recipe"] a.a-link-normal') || 
+                       card.querySelector("h2 a") || 
+                       card.querySelector("a h2")?.closest('a');
+                       
+        if (!linkEl) continue;
+
+        // Extract title
+        const title = linkEl.textContent?.trim() || "";
+        if (!title) continue;
+
+        // Extract URL
+        const rawHref = linkEl.getAttribute("href") || "";
+        if (!rawHref) continue;
+        const url = rawHref.startsWith("http") ? rawHref : `https://www.amazon.com.au${rawHref}`;
+
+        // Extract price
+        let price: number | null = null;
+        const priceWhole = card.querySelector(".a-price-whole");
+        const priceFraction = card.querySelector(".a-price-fraction");
+        if (priceWhole) {
+          const whole = priceWhole.textContent?.replace(/[^0-9]/g, "") || "0";
+          const fraction = priceFraction?.textContent?.replace(/[^0-9]/g, "") || "00";
+          price = parseFloat(`${whole}.${fraction}`);
+        }
+
+        searchResults.push({
+          title,
+          price,
+          url,
+          rating: null,
+          reviewCount: null,
+          isPrime: false,
+        });
+      }
+
+      return searchResults;
+    }, this.maxResults);
+
+    return results;
+  }
+}
