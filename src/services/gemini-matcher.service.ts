@@ -7,12 +7,12 @@ import { GoogleGenAI } from "@google/genai";
 import type { BecexProduct, AmazonSearchResult, GeminiMatchResult } from "../types/index.js";
 import { logger } from "../utils/logger.js";
 
-const MATCH_PROMPT_TEMPLATE = `You are a product matching expert. Your job is to determine which Amazon search result in the provided SCREENSHOT and LIST is the EXACT SAME product as the source product.
+const MATCH_PROMPT_TEMPLATE = `You are a product matching expert. Your job is to determine which search result in the provided SCREENSHOT and LIST is the EXACT SAME product as the source product.
 
 SOURCE PRODUCT:
 Name: {{PRODUCT_NAME}}
 
-AMAZON RESULTS LIST:
+SEARCH RESULTS LIST:
 {{SEARCH_RESULTS}}
 
 MATCHING RULES:

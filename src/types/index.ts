@@ -2,6 +2,8 @@
 // BXT-SCRAPPER Type Definitions
 // ============================================================
 
+export type ScraperTarget = "amazon" | "jbhifi" | "kogan" | "phonebot";
+
 export interface BecexProduct {
   sku: string;
   productName: string;
@@ -37,5 +39,6 @@ export interface ScrapedResult {
 export interface AmazonProductDetails {
   title: string;
   price: number | null;
+  dealPrice: number | null;
   availability: string | null;
 }

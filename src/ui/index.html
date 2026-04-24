@@ -263,12 +263,16 @@
             formContainer.innerHTML = "";
 
             const fieldMeta = {
+                "SCRAPER_TARGET": { label: "Scraper Target", type: "select", options: ["amazon", "jbhifi", "kogan", "phonebot"], hint: "Choose which website to scrape" },
                 "GEMINI_API_KEY": { label: "Gemini API Key", type: "password", hint: "Get this from Google AI Studio" },
                 "PROXY_URL": { label: "Proxy URL", type: "text", hint: "Optional. E.g., http://user:pass@host:port" },
                 "AMAZON_DOMAIN": { label: "Amazon Domain", type: "text", hint: "E.g., amazon.com.au" },
+                "JBHIFI_DOMAIN": { label: "JB Hi-Fi Domain", type: "text", hint: "E.g., www.jbhifi.com.au" },
                 "REQUEST_DELAY_MIN_MS": { label: "Minimum Request Delay (ms)", type: "number", hint: "E.g., 3000" },
                 "REQUEST_DELAY_MAX_MS": { label: "Maximum Request Delay (ms)", type: "number", hint: "E.g., 8000" },
-                "MAX_SEARCH_RESULTS": { label: "Max Search Results", type: "number", hint: "Number of results to analyze per product" }
+                "MAX_SEARCH_RESULTS": { label: "Max Search Results", type: "number", hint: "Number of results to analyze per product" },
+                "KOGAN_DOMAIN": { label: "Kogan Domain", type: "text", hint: "E.g., www.kogan.com.au" },
+                "PHONEBOT_DOMAIN": { label: "Phonebot Domain", type: "text", hint: "E.g., www.phonebot.com.au" }
             };
             // Skip INPUT_CSV_PATH and OUTPUT_DIR — handled by upload/download cards
             const skipKeys = ["INPUT_CSV_PATH", "OUTPUT_DIR"];
@@ -283,12 +287,36 @@
                 const label = document.createElement("label");
                 label.setAttribute("for", key);
                 label.textContent = meta.label;
-                const input = document.createElement("input");
-                input.type = meta.type;
+                
+                let input;
+                if (meta.type === "select") {
+                    input = document.createElement("select");
+                    input.style.width = "100%";
+                    input.style.padding = "0.875rem 1rem";
+                    input.style.background = "var(--input-bg)";
+                    input.style.border = "1px solid var(--border-color)";
+                    input.style.borderRadius = "0.75rem";
+                    input.style.color = "white";
+                    input.style.fontSize = "1rem";
+                    input.style.appearance = "none";
+                    
+                    meta.options.forEach(opt => {
+                        const option = document.createElement("option");
+                        option.value = opt;
+                        option.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+                        if (opt === value) option.selected = true;
+                        input.appendChild(option);
+                    });
+                } else {
+                    input = document.createElement("input");
+                    input.type = meta.type;
+                    input.value = value;
+                    input.placeholder = "Enter " + meta.label;
+                }
+                
                 input.id = key;
                 input.name = key;
-                input.value = value;
-                input.placeholder = "Enter " + meta.label;
+                
                 group.appendChild(label);
                 group.appendChild(input);
                 if (meta.hint) {

@@ -14,8 +14,11 @@ import {
 import { randomDelay } from "./utils/delay.js";
 import { BrowserService } from "./services/browser.service.js";
 import { AmazonSearchService } from "./services/amazon-search.service.js";
+import { JbHifiSearchService } from "./services/jbhifi-search.service.js";
+import { PhonebotSearchService } from "./services/phonebot-search.service.js";
+import { KoganSearchService } from "./services/kogan-search.service.js";
 import { GeminiMatcherService } from "./services/gemini-matcher.service.js";
-import type { BecexProduct, ScrapedResult } from "./types/index.js";
+import type { BecexProduct, ScrapedResult, AmazonSearchResult } from "./types/index.js";
 import fs from "fs";
 import type { Page } from "playwright";
 
@@ -92,6 +95,11 @@ async function extractPriceFromProductPage(page: Page): Promise<number | null> {
       "#priceblock_ourprice",
       "#priceblock_dealprice",
       ".a-price .a-price-whole",
+      '[data-testid="ticket-price"]',
+      ".product-price",
+      ".price-new",
+      '[aria-label^="Price:"]',
+      ".price__current",
     ];
 
     for (const selector of priceSelectors) {
@@ -123,7 +131,7 @@ function cleanAmazonUrl(rawUrl: string): string {
 
 async function processSingleProduct(
   product: BecexProduct,
-  searchService: AmazonSearchService,
+  searchService: AmazonSearchService | JbHifiSearchService | KoganSearchService | PhonebotSearchService,
   matcherService: GeminiMatcherService,
   page: Page
 ): Promise<ScrapedResult> {
@@ -155,7 +163,9 @@ async function processSingleProduct(
 
   // Step 4: Extract Price from detail page
   const price = await extractPriceFromProductPage(page);
-  const cleanUrl = cleanAmazonUrl(matchedResult.url);
+  const cleanUrl = config.scraperTarget === "amazon" 
+    ? cleanAmazonUrl(matchedResult.url) 
+    : matchedResult.url.split("?")[0];
 
   return buildMatchedResult(
     product,
@@ -180,7 +190,7 @@ async function main(): Promise<void> {
   fs.mkdirSync(config.outputDir, { recursive: true });
   const completedSkus = await loadCompletedSkus(outputPath);
 
-  const pendingProducts = products.filter(p => !completedSkus.has(p.sku));
+  const pendingProducts = products.filter(p => !completedSkus.has(p.sku)).slice(0, 50);
 
   if (pendingProducts.length === 0) {
     logger.info("Nothing to do.");
@@ -193,7 +203,17 @@ async function main(): Promise<void> {
   await browserService.initialize();
   const page = await browserService.newPage();
 
-  const searchService = new AmazonSearchService(config.amazonDomain, config.maxSearchResults);
+  let searchService;
+  if (config.scraperTarget === "jbhifi") {
+    searchService = new JbHifiSearchService(config.jbhifiDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "phonebot") {
+    searchService = new PhonebotSearchService(config.phonebotDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "kogan") {
+    searchService = new KoganSearchService(config.koganDomain, config.maxSearchResults);
+  } else {
+    searchService = new AmazonSearchService(config.amazonDomain, config.maxSearchResults);
+  }
+    
   const matcherService = new GeminiMatcherService(config.geminiApiKey);
 
   for (let i = 0; i < pendingProducts.length; i++) {

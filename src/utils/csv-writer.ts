@@ -15,7 +15,8 @@ import { logger } from "./logger.js";
  */
 export function getOutputFilePath(outputDir: string): string {
   const todayStamp = new Date().toISOString().slice(0, 10);
-  return path.join(outputDir, `results_${todayStamp}.csv`);
+  const target = process.env.SCRAPER_TARGET || "results";
+  return path.join(outputDir, `${target}_${todayStamp}.csv`);
 }
 
 /**
@@ -34,9 +35,9 @@ export async function loadCompletedSkus(
     fs.createReadStream(outputPath)
       .pipe(csvParser({ separator: ";" }))
       .on("data", (row: Record<string, string>) => {
-        const sku = row["SKU"] || row["sku"];
+        const sku = (row["SKU"] || row["sku"] || row["\uFEFFSKU"] || row["\uFEFFsku"] || "").trim();
         if (sku) {
-          completedSkus.add(sku.trim());
+          completedSkus.add(sku);
         }
       })
       .on("end", () => {
@@ -72,28 +73,23 @@ export async function appendResultRow(
     );
   }
 
-  // Escape semicolons in fields by wrapping in quotes
-  const escapedTitle = result.amazonTitle.includes(";")
-    ? `"${result.amazonTitle}"`
-    : result.amazonTitle;
-
-  const escapedProductName = result.productName.includes(";")
-    ? `"${result.productName}"`
-    : result.productName;
-
-  const escapedError = result.errorMessage.includes(";")
-    ? `"${result.errorMessage}"`
-    : result.errorMessage;
+  const escapeField = (val: string | number | null): string => {
+    const str = String(val ?? "");
+    if (str.includes(";") || str.includes("\"") || str.includes("\n")) {
+      return `"${str.replace(/"/g, "\"\"")}"`;
+    }
+    return str;
+  };
 
   const row = [
     result.sku,
-    escapedProductName,
+    escapeField(result.productName),
     result.amazonUrl,
     result.amazonPrice || "",
-    escapedTitle,
+    escapeField(result.amazonTitle),
     result.matchConfidence.toString(),
     result.status,
-    escapedError,
+    escapeField(result.errorMessage),
   ].join(";");
 
   fs.appendFileSync(outputPath, row + "\n");

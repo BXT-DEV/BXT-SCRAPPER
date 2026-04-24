@@ -6,6 +6,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import type { ScraperTarget } from "../types/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,10 @@ interface AppConfig {
   geminiApiKey: string;
   proxyUrl: string | null;
   amazonDomain: string;
+  jbhifiDomain: string;
+  koganDomain: string;
+  phonebotDomain: string;
+  scraperTarget: ScraperTarget;
   requestDelayMinMs: number;
   requestDelayMaxMs: number;
   maxSearchResults: number;
@@ -40,6 +45,10 @@ function loadConfig(): AppConfig {
     geminiApiKey,
     proxyUrl: process.env.PROXY_URL || null,
     amazonDomain: process.env.AMAZON_DOMAIN || "amazon.com.au",
+    jbhifiDomain: process.env.JBHIFI_DOMAIN || "www.jbhifi.com.au",
+    phonebotDomain: process.env.PHONEBOT_DOMAIN || "www.phonebot.com.au",
+    koganDomain: process.env.KOGAN_DOMAIN || "www.kogan.com.au",
+    scraperTarget: (process.env.SCRAPER_TARGET as any) || "amazon",
     requestDelayMinMs: parseInt(process.env.REQUEST_DELAY_MIN_MS || "3000", 10),
     requestDelayMaxMs: parseInt(process.env.REQUEST_DELAY_MAX_MS || "8000", 10),
     maxSearchResults: parseInt(process.env.MAX_SEARCH_RESULTS || "5", 10),

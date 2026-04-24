@@ -123,7 +123,7 @@ export class AmazonSearchService {
 
       // Type new query slowly (human-like)
       for (const char of productQuery) {
-        await page.keyboard.type(char, { delay: Math.random() * 100 + 80 });
+        await page.keyboard.type(char, { delay: Math.random() * 20 + 30 });
       }
 
       await randomDelay(500, 1200);
