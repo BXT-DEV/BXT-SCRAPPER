@@ -56,7 +56,21 @@ export class BrowserService {
       logger.warn("No proxy configured — Amazon may block after ~10-20 requests");
     }
 
-    this.browser = await chromium.launch(launchOptions);
+    try {
+      this.browser = await chromium.launch(launchOptions);
+    } catch (error) {
+      const msg = (error as Error).message;
+      if (msg.includes("Executable doesn't exist") || msg.includes("look like playwright was installed")) {
+        logger.error("══════════════════════════════════════════════════════════════");
+        logger.error("  BROWSER NOT FOUND!                                          ");
+        logger.error("  Playwright requires Chromium to be installed.               ");
+        logger.error("  Please run this command in your terminal:                  ");
+        logger.error("  npx playwright install chromium                             ");
+        logger.error("══════════════════════════════════════════════════════════════");
+        process.exit(1);
+      }
+      throw error;
+    }
 
     this.context = await this.browser.newContext({
       viewport: randomViewport(),

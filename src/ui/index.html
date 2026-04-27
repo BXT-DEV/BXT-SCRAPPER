@@ -263,11 +263,18 @@
             formContainer.innerHTML = "";
 
             const fieldMeta = {
-                "SCRAPER_TARGET": { label: "Scraper Target", type: "select", options: ["amazon", "jbhifi", "kogan", "phonebot"], hint: "Choose which website to scrape" },
+                "MAPPING_CATEGORY": { label: "Mapping Category", type: "select", options: ["MAPPING REFURBISHED", "MAPPING BRAND NEW", "MAPPING BRAND NEW Laptop", "MAPPING BRAND NEW Lens dan Camera"], hint: "Select the product mapping category rules to apply" },
+                "SCRAPER_TARGET": { label: "Scraper Target", type: "select", options: ["amazon", "jbhifi", "kogan", "phonebot", "reebelo", "backmarket", "mobileciti", "buymobile", "spectronic", "bestmobilephone"], hint: "Choose which website to scrape" },
                 "GEMINI_API_KEY": { label: "Gemini API Key", type: "password", hint: "Get this from Google AI Studio" },
                 "PROXY_URL": { label: "Proxy URL", type: "text", hint: "Optional. E.g., http://user:pass@host:port" },
                 "AMAZON_DOMAIN": { label: "Amazon Domain", type: "text", hint: "E.g., amazon.com.au" },
                 "JBHIFI_DOMAIN": { label: "JB Hi-Fi Domain", type: "text", hint: "E.g., www.jbhifi.com.au" },
+                "REEBELO_DOMAIN": { label: "Reebelo Domain", type: "text", hint: "E.g., reebelo.com.au" },
+                "BACKMARKET_DOMAIN": { label: "Backmarket Domain", type: "text", hint: "E.g., www.backmarket.com.au" },
+                "MOBILECITI_DOMAIN": { label: "Mobileciti Domain", type: "text", hint: "E.g., www.mobileciti.com.au" },
+                "BUYMOBILE_DOMAIN": { label: "BuyMobile Domain", type: "text", hint: "E.g., buymobile.com.au" },
+                "SPECTRONIC_DOMAIN": { label: "Spectronic Domain", type: "text", hint: "E.g., spectronic.com.au" },
+                "BESTMOBILEPHONE_DOMAIN": { label: "BestMobilePhone Domain", type: "text", hint: "E.g., bestmobilephone.com.au" },
                 "REQUEST_DELAY_MIN_MS": { label: "Minimum Request Delay (ms)", type: "number", hint: "E.g., 3000" },
                 "REQUEST_DELAY_MAX_MS": { label: "Maximum Request Delay (ms)", type: "number", hint: "E.g., 8000" },
                 "MAX_SEARCH_RESULTS": { label: "Max Search Results", type: "number", hint: "Number of results to analyze per product" },

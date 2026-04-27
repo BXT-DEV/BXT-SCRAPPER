@@ -15,7 +15,10 @@ const ENV_PATH = path.join(PROJECT_ROOT, '.env');
 const ENV_EXAMPLE_PATH = path.join(PROJECT_ROOT, '.env.example');
 const INPUT_DIR = path.join(PROJECT_ROOT, 'input');
 const OUTPUT_DIR = path.join(PROJECT_ROOT, 'output');
-const HTML_PATH = path.join(__dirname, 'ui', 'index.html');
+const isPackaged = (process as any).pkg !== undefined;
+const HTML_PATH = isPackaged 
+  ? path.resolve(__dirname, '../src/ui/index.html') 
+  : path.join(__dirname, 'ui', 'index.html');
 
 // ── Helpers ──────────────────────────────────────────────
 

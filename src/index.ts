@@ -17,6 +17,12 @@ import { AmazonSearchService } from "./services/amazon-search.service.js";
 import { JbHifiSearchService } from "./services/jbhifi-search.service.js";
 import { PhonebotSearchService } from "./services/phonebot-search.service.js";
 import { KoganSearchService } from "./services/kogan-search.service.js";
+import { ReebeloSearchService } from "./services/reebelo-search.service.js";
+import { BackmarketSearchService } from "./services/backmarket-search.service.js";
+import { MobilecitiSearchService } from "./services/mobileciti-search.service.js";
+import { BuymobileSearchService } from "./services/buymobile-search.service.js";
+import { SpectronicSearchService } from "./services/spectronic-search.service.js";
+import { BestmobilephoneSearchService } from "./services/bestmobilephone-search.service.js";
 import { GeminiMatcherService } from "./services/gemini-matcher.service.js";
 import type { BecexProduct, ScrapedResult, AmazonSearchResult } from "./types/index.js";
 import fs from "fs";
@@ -131,10 +137,16 @@ function cleanAmazonUrl(rawUrl: string): string {
 
 async function processSingleProduct(
   product: BecexProduct,
-  searchService: AmazonSearchService | JbHifiSearchService | KoganSearchService | PhonebotSearchService,
+  searchService: AmazonSearchService | JbHifiSearchService | KoganSearchService | PhonebotSearchService | ReebeloSearchService | BackmarketSearchService | MobilecitiSearchService | BuymobileSearchService | SpectronicSearchService | BestmobilephoneSearchService,
   matcherService: GeminiMatcherService,
   page: Page
 ): Promise<ScrapedResult> {
+  // Pre-filter: Do NOT map Pristine items to Amazon
+  if (config.scraperTarget === "amazon" && product.sku.endsWith("-VR-ASN-AU")) {
+    logger.info("Skipping Pristine item for Amazon mapping (per rules).");
+    return buildNoMatchResult(product);
+  }
+
   // Step 1: Human-like Search
   const searchQuery = product.productName
     .replace(/\s*-\s*Brand New\s*$/i, "")
@@ -162,10 +174,19 @@ async function processSingleProduct(
   await page.goto(matchedResult.url, { waitUntil: "domcontentloaded", timeout: 30000 });
 
   // Step 4: Extract Price from detail page
-  const price = await extractPriceFromProductPage(page);
-  const cleanUrl = config.scraperTarget === "amazon" 
-    ? cleanAmazonUrl(matchedResult.url) 
-    : matchedResult.url.split("?")[0];
+  let price: number | null = null;
+  let cleanUrl = matchedResult.url.split("?")[0];
+
+  if ("selectVariantsAndGetPrice" in searchService) {
+    const result = await (searchService as any).selectVariantsAndGetPrice(page, product);
+    price = result.price;
+    cleanUrl = result.cleanUrl;
+  } else {
+    price = await extractPriceFromProductPage(page);
+    if (config.scraperTarget === "amazon") {
+      cleanUrl = cleanAmazonUrl(matchedResult.url);
+    }
+  }
 
   return buildMatchedResult(
     product,
@@ -210,11 +231,23 @@ async function main(): Promise<void> {
     searchService = new PhonebotSearchService(config.phonebotDomain, config.maxSearchResults);
   } else if (config.scraperTarget === "kogan") {
     searchService = new KoganSearchService(config.koganDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "reebelo") {
+    searchService = new ReebeloSearchService(config.reebeloDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "backmarket") {
+    searchService = new BackmarketSearchService(config.backmarketDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "mobileciti") {
+    searchService = new MobilecitiSearchService(config.mobilecitiDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "buymobile") {
+    searchService = new BuymobileSearchService(config.buymobileDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "spectronic") {
+    searchService = new SpectronicSearchService(config.spectronicDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "bestmobilephone") {
+    searchService = new BestmobilephoneSearchService(config.bestmobilephoneDomain, config.maxSearchResults);
   } else {
     searchService = new AmazonSearchService(config.amazonDomain, config.maxSearchResults);
   }
     
-  const matcherService = new GeminiMatcherService(config.geminiApiKey);
+  const matcherService = new GeminiMatcherService(config.geminiApiKey, config.mappingCategory);
 
   for (let i = 0; i < pendingProducts.length; i++) {
     if (isShuttingDown) break;

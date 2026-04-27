@@ -7,6 +7,7 @@ import type { Page } from "playwright";
 import type { AmazonSearchResult } from "../types/index.js";
 import { logger } from "../utils/logger.js";
 import { randomDelay } from "../utils/delay.js";
+import { humanType, humanClick, moveMouseRandomly, getModifierKey } from "../utils/human-interaction.js";
 import fs from "fs";
 import path from "path";
 
@@ -95,20 +96,21 @@ export class KoganSearchService {
         throw new Error("SEARCH_BOX_NOT_FOUND");
       }
 
-      // Focus and type
-      await page.click(searchInputSelector);
-      await randomDelay(200, 500);
-      
-      // Clear existing text if any
-      await page.keyboard.down("Meta");
-      await page.keyboard.press("a");
-      await page.keyboard.up("Meta");
-      await page.keyboard.press("Backspace");
-      await randomDelay(300, 600);
+      // Use human-like interactions
+      await moveMouseRandomly(page);
+      await humanClick(page, searchInputSelector);
+      await randomDelay(300, 700);
 
-      for (const char of productQuery) {
-        await page.keyboard.type(char, { delay: Math.random() * 100 + 80 });
-      }
+      // Clear existing text if any
+      const modifier = getModifierKey();
+      await page.keyboard.down(modifier);
+      await page.keyboard.press("a");
+      await page.keyboard.up(modifier);
+      await page.keyboard.press("Backspace");
+      await randomDelay(400, 800);
+
+      // Type new query using human-like utility
+      await humanType(page, productQuery);
 
       await randomDelay(500, 1200);
       await page.keyboard.press("Enter");

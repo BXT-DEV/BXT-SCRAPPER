@@ -11,15 +11,30 @@ const MATCH_PROMPT_TEMPLATE = `You are a product matching expert. Your job is to
 
 SOURCE PRODUCT:
 Name: {{PRODUCT_NAME}}
+SKU: {{PRODUCT_SKU}}
 
 SEARCH RESULTS LIST:
 {{SEARCH_RESULTS}}
+
+CURRENT MAPPING CATEGORY: {{MAPPING_CATEGORY}}
 
 MATCHING RULES:
 1. Brand, Model, and Specs (Storage/RAM) must match exactly.
 2. Look at the screenshot to confirm the product image matches the description.
 3. If multiple match, pick the best one.
 4. If none match, set isMatch to false.
+
+CRITICAL MAPPING RULES (MUST FOLLOW STRICTLY):
+- For REFURBISHED items (Source SKU ends in "-VR-ASN-AU" for Pristine, "-RD-VR-EXD-AU" for Excellent):
+  * Reebelo: Pristine -> Premium, Excellent -> Excellent. ONLY Standard Battery & Physical SIM.
+  * Backmarket: Pristine -> Excellent, Excellent -> Good. ONLY Physical SIM.
+  * Amazon: DO NOT map Pristine items to Amazon. Excellent -> Excellent or Renewed. NO bonus accessories, NO warranty > 6 months, NO Australian version/stock, NO pre-orders.
+- For BRAND NEW items (Non-Laptop, Lenses, Camera):
+  * Amazon: NO bonus accessories, NO warranty > 1 year, NO Australian version/stock, NO pre-orders. MUST NOT have condition notes.
+  * Mobileciti/BuyMobile/Digidirect: Must be specific child variant URL.
+  * JB Hi-Fi: Watch out for nested vs single products.
+- For BRAND NEW Laptops (Scorptec, Centrecom):
+  * Match Model Number if available.
 
 Respond ONLY with a valid JSON object (no markdown):
 {
@@ -31,9 +46,11 @@ Respond ONLY with a valid JSON object (no markdown):
 
 export class GeminiMatcherService {
   private readonly genAI: GoogleGenAI;
+  private readonly mappingCategory: string;
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, mappingCategory: string) {
     this.genAI = new GoogleGenAI({ apiKey: apiKey || "dummy" });
+    this.mappingCategory = mappingCategory;
   }
 
   async findBestMatch(
@@ -52,6 +69,8 @@ export class GeminiMatcherService {
 
     const promptText = MATCH_PROMPT_TEMPLATE
       .replace("{{PRODUCT_NAME}}", becexProduct.productName)
+      .replace("{{PRODUCT_SKU}}", becexProduct.sku)
+      .replace("{{MAPPING_CATEGORY}}", this.mappingCategory)
       .replace("{{SEARCH_RESULTS}}", formattedResults);
 
     try {

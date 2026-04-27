@@ -1,0 +1,55 @@
+// ============================================================
+// Mobileciti Search Service
+// Scrapes Mobileciti search results
+// ============================================================
+
+import type { Page } from "playwright";
+import type { AmazonSearchResult } from "../types/index.js";
+import { logger } from "../utils/logger.js";
+import { randomDelay } from "../utils/delay.js";
+
+export class MobilecitiSearchService {
+  private readonly domain: string;
+  private readonly maxResults: number;
+
+  constructor(domain: string, maxResults: number) {
+    this.domain = domain;
+    this.maxResults = maxResults;
+  }
+
+  async searchProduct(page: Page, productQuery: string): Promise<AmazonSearchResult[]> {
+    const searchUrl = `https://${this.domain}/catalogsearch/result/?q=${encodeURIComponent(productQuery)}`;
+    logger.info(`Visiting Mobileciti: ${searchUrl}`);
+    
+    await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await randomDelay(2000, 3000);
+
+    const results = await page.evaluate((maxResults) => {
+      const items: any[] = [];
+      const cards = document.querySelectorAll('.product-item-info, .item.product');
+      
+      for (const card of Array.from(cards).slice(0, maxResults)) {
+        const titleEl = card.querySelector('.product-item-link, .product-item-name a, h2');
+        const priceEl = card.querySelector('.price, [data-price-type="finalPrice"] .price');
+        
+        if (!titleEl) continue;
+
+        const title = titleEl.textContent?.trim() || "";
+        const rawUrl = titleEl.getAttribute('href') || card.querySelector('a')?.getAttribute('href') || "";
+        const url = rawUrl.startsWith('http') ? rawUrl : `https://${window.location.host}${rawUrl}`;
+        
+        let price = null;
+        if (priceEl) {
+          const match = priceEl.textContent?.replace(/[^0-9.]/g, "");
+          if (match) price = parseFloat(match);
+        }
+
+        items.push({ title, price, url, rating: null, reviewCount: null, isPrime: false });
+      }
+      return items;
+    }, this.maxResults);
+
+    logger.info(`Found ${results.length} results on Mobileciti.`);
+    return results;
+  }
+}

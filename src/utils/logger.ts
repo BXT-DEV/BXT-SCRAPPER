@@ -10,7 +10,10 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PROJECT_ROOT = path.resolve(__dirname, "../..");
+const isPackaged = (process as any).pkg !== undefined;
+const PROJECT_ROOT = isPackaged 
+  ? process.cwd() 
+  : path.resolve(__dirname, "../..");
 
 const LOGS_DIR = path.join(PROJECT_ROOT, "logs");
 fs.mkdirSync(LOGS_DIR, { recursive: true });
