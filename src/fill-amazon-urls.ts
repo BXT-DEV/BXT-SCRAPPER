@@ -97,9 +97,31 @@ async function main() {
       continue;
     }
 
+    const progress = `[${i + 1}/${rows.length}]`;
+
+    // 1. Re-verify existing URLs (Repair Mode)
+    if (comp3Url && productName) {
+      logger.info(`${progress} Verifying existing URL: ${comp3Url}`);
+      try {
+        await page.goto(comp3Url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        const pageTitle = await page.title();
+        const isVerified = matcherService.verifyMatchConsistency(productName, pageTitle);
+        
+        if (!isVerified) {
+          logger.warn(`  -> ⚠️ Consistency check FAILED (Wrong Color/Storage). Clearing for re-search.`);
+          comp3Url = ""; // Mark as empty to trigger search below
+          row["Competitor #3 URL"] = "";
+        } else {
+          logger.info(`  -> ✅ Existing URL is valid.`);
+        }
+      } catch (e) {
+        logger.warn(`  -> ⚠️ Could not visit existing URL. Skipping verification.`);
+      }
+    }
+
+    // 2. Search and Fill if empty (or cleared above)
     if (!comp3Url && productName) {
-      const progress = `[${i + 1}/${rows.length}]`;
-      logger.info(`${progress} Empty URL for: ${productName}. Searching...`);
+      logger.info(`${progress} Searching for: ${productName}...`);
       
       try {
         const searchQuery = productName.replace(/\s*-\s*Brand New\s*$/i, "").replace(/[()"]/g, "").trim();
@@ -119,7 +141,7 @@ async function main() {
             } catch (e) {}
 
             row["Competitor #3 URL"] = cleanUrl;
-            logger.info(`  -> ✅ Found URL: ${cleanUrl}`);
+            logger.info(`  -> ✅ Found NEW valid URL: ${cleanUrl}`);
             
             // Save incremental update
             saveIncremental();
@@ -128,8 +150,7 @@ async function main() {
             // Polite delay
             await randomDelay(config.requestDelayMinMs, config.requestDelayMaxMs);
           } else {
-            logger.info(`  -> ❌ No AI match found.`);
-            // Short delay
+            logger.info(`  -> ❌ No valid match found (AI rejected or no candidates).`);
             await randomDelay(1000, 2000);
           }
         } else {
@@ -137,11 +158,14 @@ async function main() {
           await randomDelay(1000, 2000);
         }
       } catch (error: any) {
+        if (error.message.includes("429") || error.message.includes("quota")) {
+          logger.error("Gemini Quota Exceeded! Please wait or use a different API Key.");
+          break; // Stop loop to avoid spamming
+        }
         if (error.message === "CAPTCHA_DETECTED") {
           logger.error("CAPTCHA detected! Waiting 60s...");
           await randomDelay(60000, 90000);
-          i--; // Retry this row
-          continue;
+          i--; continue;
         }
         logger.error(`  -> ⚠️ Error: ${error.message}`);
       }

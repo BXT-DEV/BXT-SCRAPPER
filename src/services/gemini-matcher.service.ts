@@ -112,7 +112,7 @@ export class GeminiMatcherService {
     }
   }
 
-  private verifyMatchConsistency(sourceName: string, targetTitle: string): boolean {
+  public verifyMatchConsistency(sourceName: string, targetTitle: string): boolean {
     const sourceLower = sourceName.toLowerCase();
     const targetLower = targetTitle.toLowerCase();
 
