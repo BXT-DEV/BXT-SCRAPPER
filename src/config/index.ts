@@ -34,6 +34,10 @@ interface AppConfig {
   buymobileDomain: string;
   spectronicDomain: string;
   bestmobilephoneDomain: string;
+  scorptecDomain: string;
+  centrecomDomain: string;
+  digidirectDomain: string;
+  georgesDomain: string;
   scraperTarget: ScraperTarget;
   requestDelayMinMs: number;
   requestDelayMaxMs: number;
@@ -68,6 +72,10 @@ function loadConfig(): AppConfig {
     buymobileDomain: process.env.BUYMOBILE_DOMAIN || "buymobile.com.au",
     spectronicDomain: process.env.SPECTRONIC_DOMAIN || "spectronic.com.au",
     bestmobilephoneDomain: process.env.BESTMOBILEPHONE_DOMAIN || "bestmobilephone.com.au",
+    scorptecDomain: process.env.SCORPTEC_DOMAIN || "www.scorptec.com.au",
+    centrecomDomain: process.env.CENTRECOM_DOMAIN || "www.centrecom.com.au",
+    digidirectDomain: process.env.DIGIDIRECT_DOMAIN || "www.digidirect.com.au",
+    georgesDomain: process.env.GEORGES_DOMAIN || "www.georges.com.au",
     scraperTarget: (process.env.SCRAPER_TARGET as any) || "amazon",
     requestDelayMinMs: parseInt(process.env.REQUEST_DELAY_MIN_MS || "3000", 10),
     requestDelayMaxMs: parseInt(process.env.REQUEST_DELAY_MAX_MS || "8000", 10),

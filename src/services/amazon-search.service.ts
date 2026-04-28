@@ -85,6 +85,9 @@ export class AmazonSearchService {
         // Wait for the Amazon page to fully render
         await page.waitForLoadState("load").catch(() => {});
         await randomDelay(2000, 4000);
+
+        // Set delivery postcode to 3175 Dandenong
+        await this.setDeliveryPostcode(page);
       }
 
       // Check for CAPTCHA
@@ -243,5 +246,46 @@ export class AmazonSearchService {
     }, this.maxResults);
 
     return results;
+  }
+
+  /**
+   * Sets the delivery postcode on Amazon to "3175" (Dandenong) to ensure accurate stock/pricing.
+   */
+  private async setDeliveryPostcode(page: Page): Promise<void> {
+    try {
+      const locationLine2 = await page.$("#glow-ingress-line2");
+      if (locationLine2) {
+        const locationText = await locationLine2.textContent();
+        if (locationText && locationText.includes("3175")) {
+          logger.info("Delivery postcode is already set to 3175.");
+          return;
+        }
+      }
+
+      logger.info("Setting delivery postcode to 3175...");
+      await humanClick(page, "#nav-global-location-popover-link");
+      await randomDelay(1500, 2500);
+
+      const postcodeInput = await page.$("#GLUXZipUpdateInput");
+      if (postcodeInput) {
+        await postcodeInput.fill("3175");
+        await randomDelay(500, 1000);
+        await humanClick(page, "span[data-action='GLUXPostalUpdateAction'] input, #GLUXZipUpdate input");
+        await randomDelay(2000, 3000);
+
+        // Sometimes it asks to confirm or reload
+        const continueBtn = await page.$("span.a-button[name='glowDoneButton'] input, #GLUXConfirmClose");
+        if (continueBtn) {
+          await continueBtn.click();
+        }
+        await page.waitForLoadState("networkidle").catch(() => {});
+        await randomDelay(1000, 2000);
+        logger.info("Successfully set delivery postcode to 3175.");
+      } else {
+        logger.warn("Could not find postcode input in location modal.");
+      }
+    } catch (err) {
+      logger.warn(`Failed to set delivery postcode: ${(err as Error).message}`);
+    }
   }
 }

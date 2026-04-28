@@ -23,6 +23,10 @@ import { MobilecitiSearchService } from "./services/mobileciti-search.service.js
 import { BuymobileSearchService } from "./services/buymobile-search.service.js";
 import { SpectronicSearchService } from "./services/spectronic-search.service.js";
 import { BestmobilephoneSearchService } from "./services/bestmobilephone-search.service.js";
+import { ScorptecSearchService } from "./services/scorptec-search.service.js";
+import { CentrecomSearchService } from "./services/centrecom-search.service.js";
+import { DigidirectSearchService } from "./services/digidirect-search.service.js";
+import { GeorgesSearchService } from "./services/georges-search.service.js";
 import { GeminiMatcherService } from "./services/gemini-matcher.service.js";
 import type { BecexProduct, ScrapedResult, AmazonSearchResult } from "./types/index.js";
 import fs from "fs";
@@ -137,7 +141,7 @@ function cleanAmazonUrl(rawUrl: string): string {
 
 async function processSingleProduct(
   product: BecexProduct,
-  searchService: AmazonSearchService | JbHifiSearchService | KoganSearchService | PhonebotSearchService | ReebeloSearchService | BackmarketSearchService | MobilecitiSearchService | BuymobileSearchService | SpectronicSearchService | BestmobilephoneSearchService,
+  searchService: AmazonSearchService | JbHifiSearchService | KoganSearchService | PhonebotSearchService | ReebeloSearchService | BackmarketSearchService | MobilecitiSearchService | BuymobileSearchService | SpectronicSearchService | BestmobilephoneSearchService | ScorptecSearchService | CentrecomSearchService | DigidirectSearchService | GeorgesSearchService,
   matcherService: GeminiMatcherService,
   page: Page
 ): Promise<ScrapedResult> {
@@ -243,6 +247,14 @@ async function main(): Promise<void> {
     searchService = new SpectronicSearchService(config.spectronicDomain, config.maxSearchResults);
   } else if (config.scraperTarget === "bestmobilephone") {
     searchService = new BestmobilephoneSearchService(config.bestmobilephoneDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "scorptec") {
+    searchService = new ScorptecSearchService(config.scorptecDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "centrecom") {
+    searchService = new CentrecomSearchService(config.centrecomDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "digidirect") {
+    searchService = new DigidirectSearchService(config.digidirectDomain, config.maxSearchResults);
+  } else if (config.scraperTarget === "georges") {
+    searchService = new GeorgesSearchService(config.georgesDomain, config.maxSearchResults);
   } else {
     searchService = new AmazonSearchService(config.amazonDomain, config.maxSearchResults);
   }

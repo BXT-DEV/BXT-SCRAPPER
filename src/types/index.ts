@@ -2,7 +2,7 @@
 // BXT-SCRAPPER Type Definitions
 // ============================================================
 
-export type ScraperTarget = "amazon" | "jbhifi" | "kogan" | "phonebot" | "reebelo" | "backmarket" | "mobileciti" | "buymobile" | "spectronic" | "bestmobilephone";
+export type ScraperTarget = "amazon" | "jbhifi" | "kogan" | "phonebot" | "reebelo" | "backmarket" | "mobileciti" | "buymobile" | "spectronic" | "bestmobilephone" | "scorptec" | "centrecom" | "digidirect" | "georges";
 
 export type MappingCategory = "MAPPING REFURBISHED" | "MAPPING BRAND NEW" | "MAPPING BRAND NEW Laptop" | "MAPPING BRAND NEW Lens dan Camera";
 
