@@ -251,7 +251,7 @@ export class AmazonSearchService {
   /**
    * Sets the delivery postcode on Amazon to "3175" (Dandenong) to ensure accurate stock/pricing.
    */
-  private async setDeliveryPostcode(page: Page): Promise<void> {
+  public async setDeliveryPostcode(page: Page): Promise<void> {
     try {
       // 1. Quick check if already set
       const locationLine2 = await page.$("#glow-ingress-line2");

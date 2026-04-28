@@ -80,7 +80,7 @@ async function main() {
   }
 
   let updatedCount = 0;
-
+  let isFirstAmazonLoad = true;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const productName = row["PRODUCT NAME"] || "";
@@ -101,9 +101,16 @@ async function main() {
 
     // 1. Re-verify existing URLs (Repair Mode)
     if (comp3Url && productName) {
-      logger.info(`${progress} Verifying existing URL: ${comp3Url}`);
+      logger.info(`${progress} [REPAIR] Verifying existing URL for color/storage: ${comp3Url}`);
       try {
         await page.goto(comp3Url, { waitUntil: "domcontentloaded", timeout: 20000 });
+        
+        // Ensure postcode is set on first visit
+        if (isFirstAmazonLoad) {
+          await searchService.setDeliveryPostcode(page);
+          isFirstAmazonLoad = false;
+        }
+
         const pageTitle = await page.title();
         const isVerified = matcherService.verifyMatchConsistency(productName, pageTitle);
         
