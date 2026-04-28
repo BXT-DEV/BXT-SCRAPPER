@@ -19,16 +19,16 @@ SEARCH RESULTS LIST:
 CURRENT MAPPING CATEGORY: {{MAPPING_CATEGORY}}
 
 MATCHING RULES:
-1. Brand, Model, and Specs (Storage/RAM) must match exactly.
-2. Look at the screenshot to confirm the product image matches the description.
+1. Brand, Model, Color, and Specs (Storage/RAM) must match exactly. IF THE COLOR IS DIFFERENT, IT IS NOT A MATCH.
+2. Look at the screenshot to confirm the product image and color matches the description.
 3. If multiple match, pick the best one.
-4. If none match, set isMatch to false.
+4. If none match or color/specs differ, set isMatch to false.
 
 CRITICAL MAPPING RULES (MUST FOLLOW STRICTLY):
 - For REFURBISHED items (Source SKU ends in "-VR-ASN-AU" for Pristine, "-RD-VR-EXD-AU" for Excellent):
   * Reebelo: Pristine -> Premium, Excellent -> Excellent. ONLY Standard Battery & Physical SIM.
   * Backmarket: Pristine -> Excellent, Excellent -> Good. ONLY Physical SIM.
-  * Amazon: DO NOT map Pristine items to Amazon. Excellent -> Excellent or Renewed. NO bonus accessories, NO warranty > 6 months, NO Australian version/stock, NO pre-orders.
+  * Amazon: DO NOT map Pristine items to Amazon. Excellent -> MATCH ONLY Excellent or Renewed (on Amazon, Renewed means Excellent). NO bonus accessories, NO warranty > 6 months, NO Australian version/stock, NO pre-orders.
 - For BRAND NEW items (Non-Laptop, Lenses, Camera):
   * Amazon: NO bonus accessories, NO warranty > 1 year, NO Australian version/stock, NO pre-orders. MUST NOT have condition notes.
   * Mobileciti/BuyMobile/Digidirect: Must be specific child variant URL.

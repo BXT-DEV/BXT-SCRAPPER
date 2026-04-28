@@ -198,10 +198,14 @@ function handleDownloadFile(res: http.ServerResponse, filename: string) {
   }
 }
 
+// ── Scraper Management ──
+let currentScraperProcess: any = null;
+
 // ── Server ───────────────────────────────────────────────
 
 const server = http.createServer(async (req, res) => {
-  const url = req.url || '/';
+  const fullUrl = req.url || '/';
+  const url = fullUrl.split('?')[0].replace(/\/$/, '') || '/';
   const method = req.method || 'GET';
 
   try {
@@ -210,6 +214,57 @@ const server = http.createServer(async (req, res) => {
     if (method === 'POST' && url === '/api/env') return await handlePostEnv(req, res);
     if (method === 'POST' && url === '/api/upload-csv') return await handleUploadCsv(req, res);
     if (method === 'GET' && url === '/api/output-files') return await handleGetOutputFiles(res);
+    
+    if (method === 'POST' && url === '/api/run-scraper') {
+      if (currentScraperProcess) {
+        return jsonResponse(res, { success: false, error: 'Scraper is already running' }, 400);
+      }
+
+      const currentEnv = await parseEnvFile(ENV_PATH);
+      const inputPath = currentEnv['INPUT_CSV_PATH'] || 'input/upload.csv';
+      
+      let commandToRun = 'npm run scrape';
+      try {
+        const fullInputPath = path.join(PROJECT_ROOT, inputPath);
+        const fileContent = await fs.readFile(fullInputPath, 'utf-8');
+        const firstLine = fileContent.split('\n')[0];
+        
+        // detect format: if it contains 'Competitor #3 URL' or 'Harga AMAZON', it's the full format
+        if (firstLine && (firstLine.includes('Competitor #3 URL') || firstLine.includes('Harga AMAZON'))) {
+           commandToRun = 'npm run bxt';
+        }
+      } catch (e) {
+         console.warn("Could not read input CSV for format detection", e);
+      }
+      
+      console.log(`Executing: ${commandToRun}`);
+      currentScraperProcess = exec(commandToRun, (error, stdout, stderr) => {
+        currentScraperProcess = null;
+        if (error) {
+          console.error(`Scraper error: ${error.message}`);
+          return;
+        }
+        if (stderr) console.error(`Scraper stderr: ${stderr}`);
+        console.log(`Scraper stdout: ${stdout}`);
+      });
+      return jsonResponse(res, { success: true, pid: currentScraperProcess.pid, command: commandToRun });
+    }
+
+    if (method === 'POST' && url === '/api/stop-scraper') {
+      if (currentScraperProcess) {
+        console.log(`Stopping scraper (PID: ${currentScraperProcess.pid})...`);
+        // On Windows, taskkill is more reliable for stopping sub-processes
+        if (os.platform() === 'win32') {
+          exec(`taskkill /pid ${currentScraperProcess.pid} /t /f`);
+        } else {
+          currentScraperProcess.kill('SIGINT');
+        }
+        currentScraperProcess = null;
+        return jsonResponse(res, { success: true, message: 'Scraper stopped' });
+      }
+      return jsonResponse(res, { success: false, error: 'No scraper is running' });
+    }
+
     if (method === 'GET' && url.startsWith('/api/download/')) {
       const filename = decodeURIComponent(url.replace('/api/download/', ''));
       return handleDownloadFile(res, filename);

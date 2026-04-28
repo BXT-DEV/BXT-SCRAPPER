@@ -253,39 +253,160 @@ export class AmazonSearchService {
    */
   private async setDeliveryPostcode(page: Page): Promise<void> {
     try {
+      // 1. Quick check if already set
       const locationLine2 = await page.$("#glow-ingress-line2");
       if (locationLine2) {
-        const locationText = await locationLine2.textContent();
-        if (locationText && locationText.includes("3175")) {
+        const locationText = (await locationLine2.textContent()) || "";
+        if (locationText.includes("3175")) {
           logger.info("Delivery postcode is already set to 3175.");
           return;
         }
       }
 
       logger.info("Setting delivery postcode to 3175...");
-      await humanClick(page, "#nav-global-location-popover-link");
-      await randomDelay(1500, 2500);
+      
+      // 2. Open popover if not already open
+      const isModalOpen = await page.evaluate(() => {
+        const popover = document.querySelector(".a-popover-modal");
+        return popover && window.getComputedStyle(popover).display !== "none";
+      });
 
-      const postcodeInput = await page.$("#GLUXZipUpdateInput");
-      if (postcodeInput) {
-        await postcodeInput.fill("3175");
-        await randomDelay(500, 1000);
-        await humanClick(page, "span[data-action='GLUXPostalUpdateAction'] input, #GLUXZipUpdate input");
+      if (!isModalOpen) {
+        await humanClick(page, "#nav-global-location-popover-link");
         await randomDelay(2000, 3000);
-
-        // Sometimes it asks to confirm or reload
-        const continueBtn = await page.$("span.a-button[name='glowDoneButton'] input, #GLUXConfirmClose");
-        if (continueBtn) {
-          await continueBtn.click();
-        }
-        await page.waitForLoadState("networkidle").catch(() => {});
-        await randomDelay(1000, 2000);
-        logger.info("Successfully set delivery postcode to 3175.");
-      } else {
-        logger.warn("Could not find postcode input in location modal.");
       }
+
+      // 3. Type postcode manually
+      // Try both common Amazon selectors and AU-specific ones
+      const inputSelectors = ["#GLUXZipUpdateInput", "#GLUXPostalCodeWithCity_PostalCodeInput", "input[id^='GLUX'][id$='Input']"];
+      let inputSelector = "";
+      
+      for (const sel of inputSelectors) {
+        const el = await page.$(sel);
+        if (el && await el.isVisible()) {
+          inputSelector = sel;
+          break;
+        }
+      }
+
+      if (!inputSelector) {
+        // Wait a bit more for modal content to load
+        await page.waitForTimeout(2000);
+        for (const sel of inputSelectors) {
+          const el = await page.$(sel);
+          if (el && await el.isVisible()) {
+            inputSelector = sel;
+            break;
+          }
+        }
+      }
+
+      if (!inputSelector) {
+        throw new Error("Could not find postcode input field");
+      }
+
+      await page.click(inputSelector);
+      
+      // Clear existing value if any
+      await page.keyboard.down(getModifierKey());
+      await page.keyboard.press("A");
+      await page.keyboard.up(getModifierKey());
+      await page.keyboard.press("Backspace");
+           await page.keyboard.type("3175", { delay: 100 });
+      await randomDelay(1000, 1200); // Wait 1s after typing
+
+      // New: Check for city dropdown (sometimes required in AU)
+      const cityDropdownSelector = "#GLUXPostalCodeWithCity_DropdownList";
+      try {
+        const dropdown = await page.$(cityDropdownSelector);
+        if (dropdown && await dropdown.isVisible()) {
+          logger.info("City dropdown detected, selecting DANDENONG...");
+          
+          // Wait for options to load
+          await page.waitForFunction((sel) => {
+            const el = document.querySelector(sel) as HTMLSelectElement;
+            return el && el.options.length > 1;
+          }, cityDropdownSelector, { timeout: 5000 }).catch(() => {});
+
+          // Select DANDENONG exactly
+          await page.selectOption(cityDropdownSelector, { label: "DANDENONG" });
+          logger.info("Selected DANDENONG from dropdown.");
+          await randomDelay(1000, 1200); // Wait 1s after selecting city
+        }
+      } catch (e) {
+        logger.warn(`City dropdown selection failed: ${(e as Error).message}`);
+      }
+
+      // 4. Click Apply/Update button
+      const applyBtnSelectors = [
+        "#GLUXPostalCodeWithCityApplyButton input",
+        "span[data-action='GLUXPostalUpdateAction'] input",
+        "#GLUXZipUpdate input",
+        "input[aria-labelledby='GLUXZipUpdate-announce']",
+        ".GLUX_Popover input[type='submit']"
+      ];
+      
+      let applyBtnClicked = false;
+      for (const sel of applyBtnSelectors) {
+        const btn = await page.$(sel);
+        if (btn && await btn.isVisible()) {
+          logger.info(`Clicking Apply button: ${sel}`);
+          await btn.click();
+          applyBtnClicked = true;
+          break;
+        }
+      }
+
+      if (!applyBtnClicked) {
+        const applyBtnByText = await page.$("span:has-text('Apply')");
+        if (applyBtnByText) {
+          await applyBtnByText.click();
+          applyBtnClicked = true;
+        }
+      }
+
+      // Wait for page to reload/navigation
+      logger.info("Waiting for page reload after applying postcode...");
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: "load", timeout: 15000 }).catch(() => {}),
+        randomDelay(3000, 5000)
+      ]);
+
+      // 5. Handle 'Done' or 'Continue' if it appears (sometimes stays after reload)
+      const doneBtnSelectors = [
+        "span.a-button[name='glowDoneButton'] input",
+        "#GLUXConfirmClose",
+        ".a-popover-footer input",
+        "button[name='glowDoneButton']",
+        ".a-popover-modal button:has-text('Done')"
+      ];
+      
+      for (const sel of doneBtnSelectors) {
+        const doneBtn = await page.$(sel);
+        if (doneBtn && await doneBtn.isVisible()) {
+          await doneBtn.click();
+          await randomDelay(2000, 3000);
+          break;
+        }
+      }
+
+      // Check if page needs to be refreshed (Amazon sometimes doesn't auto-refresh)
+      const locationLine2After = await page.$("#glow-ingress-line2");
+      if (locationLine2After) {
+        const text = await locationLine2After.textContent() || "";
+        if (!text.includes("3175")) {
+          logger.info("Location not updated, refreshing page...");
+          await page.reload();
+          await page.waitForLoadState("networkidle").catch(() => {});
+          await randomDelay(2000, 3000);
+        }
+      }
+
+      logger.info("Postcode setting flow completed.");
     } catch (err) {
       logger.warn(`Failed to set delivery postcode: ${(err as Error).message}`);
+      // Take a screenshot for debugging if it fails
+      await page.screenshot({ path: `./debug/postcode_fail_${Date.now()}.png` }).catch(() => {});
     }
   }
 }

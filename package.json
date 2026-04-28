@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "start": "tsx src/index.ts",
+    "bxt": "tsx src/fill-amazon-urls.ts",
     "scrape": "tsx src/index.ts",
     "scrape:dry-run": "tsx src/index.ts --dry-run",
     "config": "tsx src/config-ui.ts",

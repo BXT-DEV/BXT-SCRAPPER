@@ -141,6 +141,7 @@
         }
         .status-success { background: rgba(16,185,129,0.1); color: var(--success); border: 1px solid rgba(16,185,129,0.2); display: block !important; opacity: 1 !important; }
         .status-error { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); display: block !important; opacity: 1 !important; }
+        .status-running { background: rgba(59,130,246,0.1); color: var(--accent); border: 1px solid rgba(59,130,246,0.2); display: block !important; opacity: 1 !important; }
 
         .spinner { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: white; animation: spin 1s ease-in-out infinite; display: none; margin-right: 10px; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -168,6 +169,17 @@
                 <button class="file-remove" id="fileRemove" title="Remove">✕</button>
             </div>
             <span class="form-text" id="currentInputFile"></span>
+            <div id="runAction" style="margin-top: 1.5rem; display: none;">
+                <div style="display: flex; gap: 10px;">
+                    <button id="runBtn" class="btn btn-primary" style="flex: 2; background: var(--purple); box-shadow: 0 4px 14px 0 var(--purple-glow);">
+                        <div class="spinner"></div>
+                        <span>🚀 Run Scraper Now</span>
+                    </button>
+                    <button id="stopBtn" class="btn" style="flex: 1; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); display: none;">
+                        <span>🛑 Stop</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Settings Card -->
@@ -206,6 +218,7 @@
     const fileInfo = document.getElementById("fileInfo");
     const fileName = document.getElementById("fileName");
     const fileRemove = document.getElementById("fileRemove");
+    const stopBtn = document.getElementById("stopBtn");
     let selectedFile = null;
 
     uploadZone.addEventListener("click", () => csvFileInput.click());
@@ -246,6 +259,7 @@
             if (data.success) {
                 uploadZone.querySelector(".upload-title").textContent = "Uploaded successfully!";
                 document.getElementById("currentInputFile").textContent = "Current: " + data.savedPath;
+                document.getElementById("runAction").style.display = "block";
             }
         } catch (err) {
             uploadZone.querySelector(".upload-title").textContent = "Upload failed!";
@@ -343,6 +357,7 @@
             const currentInput = data.current["INPUT_CSV_PATH"] || data.example["INPUT_CSV_PATH"] || "";
             if (currentInput) {
                 document.getElementById("currentInputFile").textContent = "Current: " + currentInput;
+                document.getElementById("runAction").style.display = "block";
             }
         } catch (error) {
             document.getElementById("dynamicFields").innerHTML = '<p style="color: #ef4444;">Error loading configuration: ' + error.message + '</p>';
@@ -350,6 +365,61 @@
 
         // Load output files
         loadOutputFiles();
+
+        // Run Scraper Button
+        document.getElementById("runBtn").addEventListener("click", async () => {
+            const btn = document.getElementById("runBtn");
+            const status = document.getElementById("statusMessage");
+            btn.classList.add("loading");
+            btn.querySelector("span").textContent = "Starting Scraper...";
+            status.textContent = "Scraper started! Check your terminal for logs.";
+            status.className = "status-running";
+
+            try {
+                const res = await fetch("/api/run-scraper", { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    const mode = data.command === 'npm run bxt' ? "URL Filler Mode" : "Price Scraper Mode";
+                    status.textContent = `Scraper started (${mode})! Check your terminal for logs.`;
+                    stopBtn.style.display = "block";
+                    setTimeout(() => {
+                        btn.classList.remove("loading");
+                        btn.querySelector("span").textContent = "🚀 Run Scraper Now";
+                    }, 2000);
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                status.textContent = "Failed to start scraper: " + err.message;
+                status.className = "status-error";
+                btn.classList.remove("loading");
+                btn.querySelector("span").textContent = "🚀 Run Scraper Now";
+            }
+        });
+
+        // Stop Scraper Button
+        stopBtn.addEventListener("click", async () => {
+            const status = document.getElementById("statusMessage");
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Stopping...";
+            try {
+                const res = await fetch("/api/stop-scraper", { method: "POST" });
+                const data = await res.json();
+                if (data.success) {
+                    status.textContent = "Scraper stopped successfully.";
+                    status.className = "status-success";
+                    stopBtn.style.display = "none";
+                } else {
+                    throw new Error(data.error);
+                }
+            } catch (err) {
+                status.textContent = "Failed to stop scraper: " + err.message;
+                status.className = "status-error";
+            } finally {
+                stopBtn.disabled = false;
+                stopBtn.textContent = "🛑 Stop";
+            }
+        });
     });
 
     // === Save Config ===
