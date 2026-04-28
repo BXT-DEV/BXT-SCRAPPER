@@ -18,11 +18,12 @@ SEARCH RESULTS LIST:
 
 CURRENT MAPPING CATEGORY: {{MAPPING_CATEGORY}}
 
-MATCHING RULES:
-1. Brand, Model, Color, and Specs (Storage/RAM) must match exactly. IF THE COLOR IS DIFFERENT, IT IS NOT A MATCH.
-2. Look at the screenshot to confirm the product image and color matches the description.
-3. If multiple match, pick the best one.
-4. If none match or color/specs differ, set isMatch to false.
+CRITICAL MATCHING RULES:
+1. **STORAGE & COLOR ARE ABSOLUTE**: If the source says "Titanium Blue" and the result says "Titanium Grey", it is NOT a match. If the source says "1TB" and the result says "512GB", it is NOT a match.
+2. **EXACT KEYWORDS**: Look for exact matches for storage (e.g., 128GB, 256GB, 512GB, 1TB) and color names.
+3. **CONDITION MATCHING**: For Refurbished, ensure the condition (Excellent/Pristine) matches the mapping rules provided below.
+4. If multiple match, pick the one that matches the title most closely.
+5. If none match or color/specs differ, set isMatch to false.
 
 CRITICAL MAPPING RULES (MUST FOLLOW STRICTLY):
 - For REFURBISHED items (Source SKU ends in "-VR-ASN-AU" for Pristine, "-RD-VR-EXD-AU" for Excellent):
@@ -30,20 +31,15 @@ CRITICAL MAPPING RULES (MUST FOLLOW STRICTLY):
   * Backmarket: Pristine -> Excellent, Excellent -> Good. ONLY Physical SIM.
   * Amazon: DO NOT map Pristine items to Amazon. Excellent -> MATCH ONLY Excellent or Renewed (Renewed = Excellent). 
     - REJECT if: Any bonus accessories (earphones, case, brick), Australian Version/AU Stock, Warranty > 6 months, Pre-orders.
-    - ONLY a data cable is permitted as an accessory.
-- For BRAND NEW items (Phones, Lenses, Camera, Laptops):
-  * Amazon: NO bonus accessories, NO Australian version/stock, NO pre-orders.
-    - Warranty MUST NOT exceed 1 year.
-    - MUST NOT have condition notes or be listed as "Renewed".
-  * Laptops (Scorptec, Centrecom): Match Model Number exactly. Same rules: No bonuses, No AU stock.
-  * Mobileciti/BuyMobile/Digidirect: Must be the specific child variant (Color/Storage) URL.
+- For BRAND NEW items:
+  * Amazon: NO bonus accessories, NO Australian version/stock, NO pre-orders, Warranty <= 1 year.
 
 Respond ONLY with a valid JSON object:
 {
   "isMatch": boolean,
   "confidence": number,
   "matchedResultIndex": number (0-based index from the list),
-  "reasoning": "short explanation"
+  "reasoning": "short explanation highlighting why storage/color/condition matches"
 }`;
 
 export class GeminiMatcherService {
@@ -97,11 +93,56 @@ export class GeminiMatcherService {
       });
 
       const text = response.text || "";
-      return this.parseGeminiResponse(text, searchResults.length);
+      const match = this.parseGeminiResponse(text, searchResults.length);
+
+      // --- Post-Verification (Zero-Debt Safety Net) ---
+      if (match.isMatch && match.matchedResultIndex >= 0) {
+        const result = searchResults[match.matchedResultIndex];
+        const isVerified = this.verifyMatchConsistency(becexProduct.productName, result.title);
+        if (!isVerified) {
+          logger.warn(`Gemini match REJECTED by local verification for: ${becexProduct.productName} -> ${result.title}`);
+          return { isMatch: false, confidence: 0, matchedResultIndex: -1, reasoning: "Rejected by local verification (Color/Storage mismatch)" };
+        }
+      }
+
+      return match;
     } catch (error) {
       logger.error(`Gemini Error: ${(error as Error).message}`);
       return { isMatch: true, confidence: 0.5, matchedResultIndex: 0, reasoning: "AI Error fallback" };
     }
+  }
+
+  private verifyMatchConsistency(sourceName: string, targetTitle: string): boolean {
+    const sourceLower = sourceName.toLowerCase();
+    const targetLower = targetTitle.toLowerCase();
+
+    // 1. Storage Check (e.g., 128GB, 1TB)
+    const storagePattern = /\b(\d+(?:GB|TB))\b/gi;
+    const sourceStorages = sourceName.match(storagePattern) || [];
+    for (const storage of sourceStorages) {
+      if (!targetLower.includes(storage.toLowerCase())) return false;
+    }
+
+    // 2. Color Check
+    // Extract color names from common patterns like "(128GB, Blue)" or "Titanium Grey"
+    const commonColors = [
+      "blue", "grey", "gray", "black", "white", "silver", "gold", "green", "pink", "purple", "violet", "orange", "yellow", "cream", "natural", "titanium"
+    ];
+    
+    for (const color of commonColors) {
+      if (sourceLower.includes(color)) {
+        // If source mentions a specific color, target must also mention it (or a close variant)
+        // Exception: if source mentions "Titanium Blue", target must mention "Blue"
+        if (!targetLower.includes(color)) {
+          // Special case for Grey/Gray
+          if (color === "grey" && targetLower.includes("gray")) continue;
+          if (color === "gray" && targetLower.includes("grey")) continue;
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   private parseGeminiResponse(responseText: string, maxResults: number): GeminiMatchResult {
