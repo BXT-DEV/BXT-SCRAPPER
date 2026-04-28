@@ -62,17 +62,38 @@ export class ReebeloSearchService {
     const isPristine = product.sku.endsWith("-VR-ASN-AU");
     const isExcellent = product.sku.endsWith("-RD-VR-EXD-AU");
 
-    // Click condition
+    // 1. Condition selection
+    let conditionSuccess = false;
     if (isPristine) {
-      await this.clickVariantByText(page, ["Premium", "Pristine"]);
+      conditionSuccess = await this.clickVariantByText(page, ["Premium", "Pristine"]);
     } else if (isExcellent) {
-      await this.clickVariantByText(page, ["Excellent"]);
+      conditionSuccess = await this.clickVariantByText(page, ["Excellent"]);
+    } else {
+      // For other refurbished types if any
+      conditionSuccess = true; 
     }
 
-    // Click Battery
-    await this.clickVariantByText(page, ["Standard Battery", "Standard"]);
-    // Verify no "eSIM only" selected
-    await this.clickVariantByText(page, ["Physical SIM", "Dual SIM", "Nano-SIM"]);
+    if (!conditionSuccess) {
+      throw new Error(`REQUIRED_VARIANT_NOT_FOUND: Condition (${isPristine ? "Premium" : "Excellent"})`);
+    }
+
+    // 2. Battery selection (Strict: Standard only)
+    const batterySuccess = await this.clickVariantByText(page, ["Standard Battery", "Standard"]);
+    if (!batterySuccess) {
+      // Some listings might not have battery choices (if they only have one type)
+      // but we should at least check if "Elevated" or "New" is NOT selected.
+      logger.warn("Could not explicitly click 'Standard Battery'. Proceeding with caution.");
+    }
+
+    // 3. SIM selection (Strict: Physical only)
+    const simSuccess = await this.clickVariantByText(page, ["Physical SIM", "Dual SIM", "Nano-SIM", "Single SIM"]);
+    if (!simSuccess) {
+      // Check if "eSIM" is the only thing present
+      const hasEsim = await page.evaluate(() => document.body.innerText.includes("eSIM"));
+      if (hasEsim) {
+        throw new Error("REQUIRED_VARIANT_NOT_FOUND: Physical SIM (Listing seems to be eSIM only)");
+      }
+    }
 
     await randomDelay(1000, 2000);
 
@@ -91,19 +112,25 @@ export class ReebeloSearchService {
     return { price, cleanUrl: page.url().split('?')[0] };
   }
 
-  private async clickVariantByText(page: Page, texts: string[]): Promise<void> {
+  private async clickVariantByText(page: Page, texts: string[]): Promise<boolean> {
     try {
-      const buttons = await page.$$('button, div[role="button"], label');
+      const buttons = await page.$$('button, div[role="button"], label, span');
       for (const btn of buttons) {
         const text = await btn.textContent();
-        if (text && texts.some(t => text.toLowerCase().includes(t.toLowerCase()))) {
-          await btn.click().catch(() => {});
-          await randomDelay(300, 600);
-          return;
+        if (text && texts.some(t => text.toLowerCase() === t.toLowerCase() || (text.toLowerCase().includes(t.toLowerCase()) && text.length < 30))) {
+          // Check if it's actually clickable or already selected
+          const isVisible = await btn.isVisible();
+          if (isVisible) {
+            await btn.click({ force: true }).catch(() => {});
+            await randomDelay(500, 1000);
+            return true;
+          }
         }
       }
+      return false;
     } catch (e) {
-      logger.warn(`Could not select variant: ${texts.join(" or ")}`);
+      logger.warn(`Error while looking for variant: ${texts.join(" or ")}`);
+      return false;
     }
   }
 }

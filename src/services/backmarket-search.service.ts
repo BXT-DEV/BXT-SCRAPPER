@@ -60,15 +60,29 @@ export class BackmarketSearchService {
     const isPristine = product.sku.endsWith("-VR-ASN-AU");
     const isExcellent = product.sku.endsWith("-RD-VR-EXD-AU");
 
-    // Click condition
+    // 1. Condition selection
+    let conditionSuccess = false;
     if (isPristine) {
-      await this.clickVariantByText(page, ["Excellent"]);
+      conditionSuccess = await this.clickVariantByText(page, ["Excellent"]);
     } else if (isExcellent) {
-      await this.clickVariantByText(page, ["Good"]);
+      conditionSuccess = await this.clickVariantByText(page, ["Good"]);
+    } else {
+      conditionSuccess = true;
     }
 
-    // Backmarket SIM rules
-    await this.clickVariantByText(page, ["Physical SIM", "Dual SIM", "Nano-SIM"]);
+    if (!conditionSuccess) {
+      throw new Error(`REQUIRED_VARIANT_NOT_FOUND: Condition (${isPristine ? "Excellent" : "Good"})`);
+    }
+
+    // 2. SIM rules (Strict: Physical only)
+    const simSuccess = await this.clickVariantByText(page, ["Physical SIM", "Dual SIM", "Nano-SIM"]);
+    if (!simSuccess) {
+       // Backmarket usually displays SIM type in the title or a badge if it's specific
+       const pageText = await page.evaluate(() => document.body.innerText);
+       if (pageText.includes("eSIM") && !pageText.includes("Physical SIM")) {
+         throw new Error("REQUIRED_VARIANT_NOT_FOUND: Physical SIM (Listing seems to be eSIM only)");
+       }
+    }
 
     await randomDelay(1000, 2000);
 
@@ -87,19 +101,24 @@ export class BackmarketSearchService {
     return { price, cleanUrl: page.url().split('?')[0] };
   }
 
-  private async clickVariantByText(page: Page, texts: string[]): Promise<void> {
+  private async clickVariantByText(page: Page, texts: string[]): Promise<boolean> {
     try {
-      const buttons = await page.$$('button, label, [role="button"]');
+      const buttons = await page.$$('button, label, [role="button"], span');
       for (const btn of buttons) {
         const text = await btn.textContent();
-        if (text && texts.some(t => text.toLowerCase().includes(t.toLowerCase()))) {
-          await btn.click().catch(() => {});
-          await randomDelay(300, 600);
-          return;
+        if (text && texts.some(t => text.toLowerCase() === t.toLowerCase() || (text.toLowerCase().includes(t.toLowerCase()) && text.length < 30))) {
+          const isVisible = await btn.isVisible();
+          if (isVisible) {
+            await btn.click({ force: true }).catch(() => {});
+            await randomDelay(500, 1000);
+            return true;
+          }
         }
       }
+      return false;
     } catch (e) {
-      logger.warn(`Could not select variant: ${texts.join(" or ")}`);
+      logger.warn(`Error while looking for variant: ${texts.join(" or ")}`);
+      return false;
     }
   }
 }

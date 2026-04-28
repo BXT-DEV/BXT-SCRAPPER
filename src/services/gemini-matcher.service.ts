@@ -28,15 +28,17 @@ CRITICAL MAPPING RULES (MUST FOLLOW STRICTLY):
 - For REFURBISHED items (Source SKU ends in "-VR-ASN-AU" for Pristine, "-RD-VR-EXD-AU" for Excellent):
   * Reebelo: Pristine -> Premium, Excellent -> Excellent. ONLY Standard Battery & Physical SIM.
   * Backmarket: Pristine -> Excellent, Excellent -> Good. ONLY Physical SIM.
-  * Amazon: DO NOT map Pristine items to Amazon. Excellent -> MATCH ONLY Excellent or Renewed (on Amazon, Renewed means Excellent). NO bonus accessories, NO warranty > 6 months, NO Australian version/stock, NO pre-orders.
-- For BRAND NEW items (Non-Laptop, Lenses, Camera):
-  * Amazon: NO bonus accessories, NO warranty > 1 year, NO Australian version/stock, NO pre-orders. MUST NOT have condition notes.
-  * Mobileciti/BuyMobile/Digidirect: Must be specific child variant URL.
-  * JB Hi-Fi: Watch out for nested vs single products.
-- For BRAND NEW Laptops (Scorptec, Centrecom):
-  * Match Model Number if available.
+  * Amazon: DO NOT map Pristine items to Amazon. Excellent -> MATCH ONLY Excellent or Renewed (Renewed = Excellent). 
+    - REJECT if: Any bonus accessories (earphones, case, brick), Australian Version/AU Stock, Warranty > 6 months, Pre-orders.
+    - ONLY a data cable is permitted as an accessory.
+- For BRAND NEW items (Phones, Lenses, Camera, Laptops):
+  * Amazon: NO bonus accessories, NO Australian version/stock, NO pre-orders.
+    - Warranty MUST NOT exceed 1 year.
+    - MUST NOT have condition notes or be listed as "Renewed".
+  * Laptops (Scorptec, Centrecom): Match Model Number exactly. Same rules: No bonuses, No AU stock.
+  * Mobileciti/BuyMobile/Digidirect: Must be the specific child variant (Color/Storage) URL.
 
-Respond ONLY with a valid JSON object (no markdown):
+Respond ONLY with a valid JSON object:
 {
   "isMatch": boolean,
   "confidence": number,
