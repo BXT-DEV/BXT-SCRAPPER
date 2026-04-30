@@ -47,7 +47,7 @@ async function main() {
   const page = await browserService.newPage();
 
   const searchService = new AmazonSearchService(config.amazonDomain, config.maxSearchResults);
-  const matcherService = new GeminiMatcherService(config.geminiApiKey, config.mappingCategory);
+  const matcherService = new GeminiMatcherService(config.geminiApiKeys, config.mappingCategory, config.scraperTarget);
 
   const escapeCsv = (val: string) => {
     if (!val) return "";
@@ -143,8 +143,8 @@ async function main() {
           await randomDelay(1000, 2000);
         }
       } catch (error: any) {
-        if (error.message.includes("429") || error.message.includes("quota")) {
-          logger.error("Gemini Quota Exceeded! Please wait or use a different API Key.");
+        if (error.message.includes("429") || error.message.includes("quota") || error.message === "ALL_GEMINI_KEYS_EXHAUSTED") {
+          logger.error("All Gemini API keys exhausted! Stopping.");
           break;
         }
         if (error.message === "CAPTCHA_DETECTED") {

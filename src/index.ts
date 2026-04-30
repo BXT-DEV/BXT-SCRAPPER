@@ -207,7 +207,10 @@ async function main(): Promise<void> {
   const startTime = Date.now();
 
   logger.info("═══════════════════════════════════════════");
-  logger.info("  BXT-SCRAPPER — Amazon Price Finder       ");
+  logger.info("  BXT-SCRAPPER — Price Finder              ");
+  logger.info("═══════════════════════════════════════════");
+  logger.info(`  Category : ${config.mappingCategory}`);
+  logger.info(`  Target   : ${config.scraperTarget}`);
   logger.info("═══════════════════════════════════════════");
 
   const products = await readProductsCsv(config.inputCsvPath);
@@ -259,7 +262,7 @@ async function main(): Promise<void> {
     searchService = new AmazonSearchService(config.amazonDomain, config.maxSearchResults);
   }
     
-  const matcherService = new GeminiMatcherService(config.geminiApiKey, config.mappingCategory);
+  const matcherService = new GeminiMatcherService(config.geminiApiKeys, config.mappingCategory, config.scraperTarget);
 
   for (let i = 0; i < pendingProducts.length; i++) {
     if (isShuttingDown) break;
@@ -282,6 +285,10 @@ async function main(): Promise<void> {
         logger.error("CAPTCHA detected! Waiting 60s...");
         await randomDelay(60000, 90000);
         i--; continue;
+      }
+      if (errorMessage === "ALL_GEMINI_KEYS_EXHAUSTED") {
+        logger.error("All Gemini API keys exhausted! Stopping processing.");
+        break;
       }
       logger.error(`${progress} ⚠️ Error: ${errorMessage}`);
     }

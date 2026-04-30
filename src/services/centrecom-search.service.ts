@@ -23,9 +23,31 @@ export class CentrecomSearchService {
     
     await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
     
-    // Wait for potential Captcha to resolve manually if needed, or by stealth
-    logger.info("Waiting for potential Captcha or page load...");
+    // Centre Com is known to have CAPTCHA (per mapping document)
+    logger.info("Waiting for potential CAPTCHA or page load...");
     await randomDelay(4000, 6000);
+
+    // Detect CAPTCHA challenges
+    const hasCaptcha = await page.evaluate(() => {
+      const body = document.body.innerText.toLowerCase();
+      const title = document.title.toLowerCase();
+      return (
+        body.includes("captcha") ||
+        body.includes("verify you are human") ||
+        body.includes("robot") ||
+        title.includes("captcha") ||
+        title.includes("security check") ||
+        !!document.querySelector("iframe[src*='captcha']") ||
+        !!document.querySelector("iframe[src*='recaptcha']") ||
+        !!document.querySelector("#captcha") ||
+        !!document.querySelector(".g-recaptcha")
+      );
+    });
+
+    if (hasCaptcha) {
+      logger.error("CAPTCHA detected on Centre Com! Waiting for manual resolution or retry...");
+      throw new Error("CAPTCHA_DETECTED");
+    }
 
     const results = await page.evaluate((maxResults) => {
       const items: any[] = [];
