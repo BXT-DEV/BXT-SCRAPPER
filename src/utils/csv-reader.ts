@@ -24,14 +24,19 @@ export async function readProductsCsv(
   const validationErrors: string[] = [];
 
   return new Promise((resolve, reject) => {
+    // Detect separator from first line
+    const firstLine = fs.readFileSync(filePath, "utf-8").split("\n")[0] || "";
+    const separator = firstLine.includes(";") ? ";" : ",";
+
     fs.createReadStream(filePath)
-      .pipe(csvParser({ separator: ";" }))
+      .pipe(csvParser({ separator }))
       .on("data", (row: Record<string, string>) => {
         const rowIndex = products.length + 1;
 
-        // Map CSV headers: "SKU" and "Product Name" (handling potential BOM)
-        const sku = (row["SKU"] || row["sku"] || row["\uFEFFSKU"] || row["\uFEFFsku"] || "").trim();
-        const productName = (row["Product Name"] || row["product_name"] || row["\uFEFFProduct Name"] || "").trim();
+        // Map CSV headers: handle both old format and new BXT format
+        // The real SKU is often in 'GTIN / EAN / UPC' in the BXT format
+        const sku = (row["SKU"] || row["GTIN / EAN / UPC"] || row["sku"] || row["\uFEFFSKU"] || row["\uFEFFsku"] || "").trim();
+        const productName = (row["Product Name"] || row["PRODUCT NAME"] || row["product_name"] || row["\uFEFFProduct Name"] || "").trim();
 
         if (!sku || !productName) {
           validationErrors.push(

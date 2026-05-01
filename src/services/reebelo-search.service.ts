@@ -11,6 +11,7 @@ import { randomDelay } from "../utils/delay.js";
 export class ReebeloSearchService {
   private readonly domain: string;
   private readonly maxResults: number;
+  private hasSetLocation = false;
 
   constructor(domain: string, maxResults: number) {
     this.domain = domain;
@@ -18,11 +19,64 @@ export class ReebeloSearchService {
   }
 
   async searchProduct(page: Page, productQuery: string): Promise<AmazonSearchResult[]> {
-    const searchUrl = `https://${this.domain}/search?q=${encodeURIComponent(productQuery)}`;
-    logger.info(`Visiting Reebelo: ${searchUrl}`);
-    
-    await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await randomDelay(2000, 3000);
+    if (!this.hasSetLocation) {
+      logger.info("Setting Reebelo location to 3175...");
+      await page.goto(`https://${this.domain}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await randomDelay(2000, 3000);
+
+      try {
+        // Try to click location trigger
+        await page.click('img[alt="Deliver to"]', { timeout: 10000 });
+        await randomDelay(1000, 2000);
+
+        // Find input inside the modal
+        const zipInput = await page.$('input[placeholder="Enter your zipcode"]');
+        if (zipInput) {
+          await zipInput.fill('3175');
+          await randomDelay(500, 1000);
+
+          // Click Apply
+          const applyBtn = await page.evaluateHandle(() => {
+            const btns = Array.from(document.querySelectorAll('button'));
+            return btns.find(b => b.textContent?.trim().toLowerCase() === 'apply');
+          });
+          if (applyBtn && applyBtn.asElement()) {
+            await applyBtn.asElement()?.click();
+            await randomDelay(2000, 3000);
+            logger.info("Location successfully set to 3175.");
+          }
+        }
+      } catch (e) {
+        logger.warn("Could not set location, proceeding anyway...");
+      }
+      this.hasSetLocation = true;
+    }
+
+    logger.info(`Searching Reebelo for: ${productQuery}`);
+    try {
+      // Ensure we are on a page where the search bar exists
+      const searchInputExists = await page.$('#e2e-searchbar-search-input');
+      if (!searchInputExists) {
+        await page.goto(`https://${this.domain}`, { waitUntil: "domcontentloaded", timeout: 30000 });
+        await randomDelay(2000, 3000);
+      }
+
+      await page.fill('#e2e-searchbar-search-input', ''); // Clear existing input
+      for (const char of productQuery) {
+        await page.type('#e2e-searchbar-search-input', char);
+        await randomDelay(50, 180); // Random typing delay per character
+      }
+      await randomDelay(500, 1000);
+      await page.click('#e2e-searchbar-search-button');
+      
+      // Wait for search results to load (SPA transition or full reload)
+      await randomDelay(4000, 5000);
+    } catch (e) {
+      logger.warn("UI search failed, falling back to direct URL...");
+      const searchUrl = `https://${this.domain}/search?q=${encodeURIComponent(productQuery)}`;
+      await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+      await randomDelay(2000, 3000);
+    }
 
     const results = await page.evaluate((maxResults) => {
       const items: any[] = [];

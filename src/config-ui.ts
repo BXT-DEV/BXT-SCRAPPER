@@ -221,23 +221,30 @@ const server = http.createServer(async (req, res) => {
       }
 
       const currentEnv = await parseEnvFile(ENV_PATH);
+      const scraperTarget = (currentEnv['SCRAPER_TARGET'] || 'amazon').toLowerCase();
       const inputPath = currentEnv['INPUT_CSV_PATH'] || 'input/upload.csv';
       
+      // Determine which command to run based on SCRAPER_TARGET and CSV format.
+      // `npm run bxt` (fill-amazon-urls.ts) is an Amazon-only URL filler for BXT-format CSVs.
+      // `npm run scrape` (index.ts) is the main orchestrator that supports ALL targets.
       let commandToRun = 'npm run scrape';
-      try {
-        const fullInputPath = path.join(PROJECT_ROOT, inputPath);
-        const fileContent = await fs.readFile(fullInputPath, 'utf-8');
-        const firstLine = fileContent.split('\n')[0];
-        
-        // detect format: if it contains 'Competitor #3 URL' or 'Harga AMAZON', it's the full format
-        if (firstLine && (firstLine.includes('Competitor #3 URL') || firstLine.includes('Harga AMAZON'))) {
-           commandToRun = 'npm run bxt';
+
+      if (scraperTarget === 'amazon') {
+        try {
+          const fullInputPath = path.join(PROJECT_ROOT, inputPath);
+          const fileContent = await fs.readFile(fullInputPath, 'utf-8');
+          const firstLine = fileContent.split('\n')[0];
+          
+          // Only use the BXT-specific Amazon filler when the CSV has the full BXT format
+          if (firstLine && (firstLine.includes('Competitor #3 URL') || firstLine.includes('Harga AMAZON'))) {
+             commandToRun = 'npm run bxt';
+          }
+        } catch (e) {
+           console.warn("Could not read input CSV for format detection", e);
         }
-      } catch (e) {
-         console.warn("Could not read input CSV for format detection", e);
       }
       
-      console.log(`Executing: ${commandToRun}`);
+      console.log(`Executing: ${commandToRun} (target: ${scraperTarget})`);
       currentScraperProcess = exec(commandToRun, (error, stdout, stderr) => {
         currentScraperProcess = null;
         if (error) {
@@ -247,7 +254,7 @@ const server = http.createServer(async (req, res) => {
         if (stderr) console.error(`Scraper stderr: ${stderr}`);
         console.log(`Scraper stdout: ${stdout}`);
       });
-      return jsonResponse(res, { success: true, pid: currentScraperProcess.pid, command: commandToRun });
+      return jsonResponse(res, { success: true, pid: currentScraperProcess.pid, command: commandToRun, target: scraperTarget });
     }
 
     if (method === 'POST' && url === '/api/stop-scraper') {

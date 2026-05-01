@@ -379,8 +379,8 @@
                 const res = await fetch("/api/run-scraper", { method: "POST" });
                 const data = await res.json();
                 if (data.success) {
-                    const mode = data.command === 'npm run bxt' ? "URL Filler Mode" : "Price Scraper Mode";
-                    status.textContent = `Scraper started (${mode})! Check your terminal for logs.`;
+                    const targetLabel = (data.target || 'amazon').charAt(0).toUpperCase() + (data.target || 'amazon').slice(1);
+                    status.textContent = `Scraper started for ${targetLabel}! Check your terminal for logs.`;
                     stopBtn.style.display = "block";
                     setTimeout(() => {
                         btn.classList.remove("loading");
